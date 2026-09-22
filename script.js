@@ -76,104 +76,66 @@ function getInputs() {
 // Calculate initial position metrics
 function calculateInitialPosition(inputs) {
     const { cash, leverage, entryPrice } = inputs;
-
     const positionSize = (cash * leverage) / entryPrice;
     const notional = cash * leverage;
-
-    return {
-        positionSize,
-        notional,
-        leverage,
-    };
+    return { positionSize, notional, leverage };
 }
 
-// Calculate what we need at a given price
-function calculateAtPrice(inputs, price) {
-    const { cash, leverage, entryPrice } = inputs;
-    const initial = calculateInitialPosition(inputs);
-    const currentPositionSize = initial.positionSize;
-
-    const unrealizedPnl = (price - entryPrice) * currentPositionSize;
-    const accountEquity = cash + unrealizedPnl;
-    const currentNotional = price * currentPositionSize;
-    const currentLeverage = currentNotional / accountEquity;
-    const targetNotional = accountEquity * leverage;
-    const additionalOzNeeded = (targetNotional - currentNotional) / price;
-
-    // Round to nearest 0.01 lots (50 oz)
-    const MIN_LOT = 0.01;
-    const LOT_SIZE = 5000;
-    const lotsNeeded = additionalOzNeeded > 0 ? Math.ceil((additionalOzNeeded / LOT_SIZE) / MIN_LOT) * MIN_LOT : 0;
-    const additionalOzPurchased = lotsNeeded * LOT_SIZE;
-    const costToBuy = additionalOzPurchased * price;
-    const newTotalPosition = currentPositionSize + additionalOzPurchased;
-    const newLeverage = (price * newTotalPosition) / accountEquity;
-
-    return {
-        price,
-        unrealizedPnl,
-        accountEquity,
-        currentLeverage,
-        lotsNeeded,
-        additionalOzPurchased,
-        costToBuy,
-        newTotalPosition,
-        newLeverage,
-    };
-}
-
-// Generate buying schedule - all prices where action is needed
+// NEW SIMPLIFIED APPROACH: Generate schedule showing what to buy at each price
 function generateBuyingSchedule(inputs) {
-    const { entryPrice, cash, leverage } = inputs;
+    const { cash, leverage, entryPrice } = inputs;
     const LOT_SIZE = 5000;
     const MIN_LOT = 0.01;
 
     const schedule = [];
-    let currentPosition = (cash * leverage) / entryPrice;  // Start with initial position
-    let lastLotsNeeded = 0;
-    let cumulativeLots = 0;
-    let cumulativeOz = 0;
-    let cumulativeCost = 0;
+    const initialPosition = (cash * leverage) / entryPrice;
 
-    // Generate prices from entry to $300 in $0.01 increments
+    let lastTotalLotsNeeded = 0;
+
+    // Iterate through every price from entry to $300
     for (let price = Math.ceil(entryPrice * 100) / 100; price <= 300; price = Math.round((price + 0.01) * 100) / 100) {
-        // Calculate with CURRENT position (including all previous purchases)
-        const unrealizedPnl = (price - entryPrice) * currentPosition;
+        // Calculate unrealized P&L and account equity with INITIAL position (no purchases yet)
+        const unrealizedPnl = (price - entryPrice) * initialPosition;
         const accountEquity = cash + unrealizedPnl;
-        const currentNotional = price * currentPosition;
-        const currentLeverage = accountEquity > 0 ? currentNotional / accountEquity : 0;
+
+        // Calculate what notional value you need to maintain target leverage
         const targetNotional = accountEquity * leverage;
-        const additionalOzNeeded = targetNotional > currentNotional ? (targetNotional - currentNotional) / price : 0;
 
-        // Round to nearest 0.01 lot
-        const lotsNeeded = additionalOzNeeded > 0 ? Math.ceil((additionalOzNeeded / LOT_SIZE) / MIN_LOT) * MIN_LOT : 0;
-        const additionalOzPurchased = lotsNeeded * LOT_SIZE;
-        const costToBuy = additionalOzPurchased * price;
-        const newTotalPosition = currentPosition + additionalOzPurchased;
-        const newLeverage = accountEquity > 0 ? (price * newTotalPosition) / accountEquity : 0;
+        // Calculate what notional value you currently have
+        const currentNotional = price * initialPosition;
 
-        // Only add to schedule if lots needed has changed AND is positive (new threshold crossed and buying)
-        if (lotsNeeded > 0 && lotsNeeded !== lastLotsNeeded) {
-            cumulativeLots += lotsNeeded;
-            cumulativeOz += additionalOzPurchased;
-            cumulativeCost += costToBuy;
+        // Calculate leverage without rebalancing
+        const currentLeverage = currentNotional / accountEquity;
+
+        // Calculate total oz needed (starting from initial position)
+        const totalOzNeeded = targetNotional / price;
+
+        // Total additional oz beyond initial position
+        const additionalOzNeeded = totalOzNeeded - initialPosition;
+
+        // Round to nearest 0.01 lot increment
+        const totalLotsNeeded = additionalOzNeeded > 0
+            ? Math.ceil((additionalOzNeeded / LOT_SIZE) / MIN_LOT) * MIN_LOT
+            : 0;
+
+        // Only add row if total lots needed has changed
+        if (totalLotsNeeded !== lastTotalLotsNeeded) {
+            const lotsAtThisPrice = totalLotsNeeded;
+            const ozAtThisPrice = lotsAtThisPrice * LOT_SIZE;
+            const costAtThisPrice = ozAtThisPrice * price;
 
             schedule.push({
                 price,
                 accountEquity,
                 currentLeverage,
-                lotsNeeded,
-                additionalOzPurchased,
-                costToBuy,
-                cumulativeLots,
-                cumulativeOz,
-                cumulativeCost,
-                newTotalPosition,
-                newLeverage,
+                totalLotsNeeded: lotsAtThisPrice,
+                totalOzNeeded: ozAtThisPrice,
+                costToBuy: costAtThisPrice,
+                newTotalPosition: initialPosition + ozAtThisPrice,
+                newLeverage: (price * (initialPosition + ozAtThisPrice)) / accountEquity,
             });
 
-            lastLotsNeeded = lotsNeeded;
-            currentPosition = newTotalPosition;  // Update position after buying
+            lastTotalLotsNeeded = totalLotsNeeded;
         }
     }
 
@@ -208,8 +170,6 @@ function updateSummary(inputs, initial) {
         const el3 = document.getElementById('initialLeverage');
         const el4 = document.getElementById('equityAtRisk');
 
-        console.log('Elements found:', !!el1, !!el2, !!el3, !!el4);
-
         if (el1) el1.textContent = formatNumber(initial.positionSize, 0);
         if (el2) el2.textContent = formatCurrency(initial.notional);
         if (el3) el3.textContent = formatNumber(initial.leverage, 1) + 'x';
@@ -234,18 +194,18 @@ function updateBuyingScheduleTable(inputs) {
         const schedule = generateBuyingSchedule(inputs);
         console.log('Generated schedule with', schedule.length, 'entries');
 
-        schedule.forEach((entry, idx) => {
+        schedule.forEach((entry) => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${formatNumber(entry.price, 2)}</td>
-                <td>${formatNumber(entry.accountEquity, 0)}</td>
+                <td>${formatCurrency(entry.accountEquity)}</td>
                 <td>${formatNumber(entry.currentLeverage, 2)}x</td>
-                <td>${formatNumber(entry.lotsNeeded, 2)} lots</td>
-                <td>${formatNumber(entry.additionalOzPurchased, 0)} oz</td>
+                <td>${formatNumber(entry.totalLotsNeeded, 2)} lots</td>
+                <td>${formatNumber(entry.totalOzNeeded, 0)} oz</td>
                 <td>${formatCurrency(entry.costToBuy)}</td>
-                <td>${formatNumber(entry.cumulativeLots, 2)} lots</td>
-                <td>${formatNumber(entry.cumulativeOz, 0)} oz</td>
-                <td>${formatCurrency(entry.cumulativeCost)}</td>
+                <td>${formatNumber(entry.totalLotsNeeded, 2)} lots</td>
+                <td>${formatNumber(entry.totalOzNeeded, 0)} oz</td>
+                <td>${formatCurrency(entry.costToBuy)}</td>
                 <td>${formatNumber(entry.newTotalPosition, 0)} oz</td>
                 <td>${formatNumber(entry.newLeverage, 2)}x</td>
             `;
@@ -263,8 +223,6 @@ function updateBuyingScheduleTable(inputs) {
 function updateChart(inputs) {
     try {
         const schedule = generateBuyingSchedule(inputs);
-
-        // Limit chart to first 100 entries for performance
         const chartData = schedule.slice(0, 100);
 
         const ctx = document.getElementById('buyingChart');
@@ -294,8 +252,8 @@ function updateChart(inputs) {
                         yAxisID: 'y',
                     },
                     {
-                        label: 'Buy Amount at Price',
-                        data: chartData.map(d => d.additionalOzPurchased),
+                        label: 'Additional Oz to Buy',
+                        data: chartData.map(d => d.totalOzNeeded),
                         borderColor: '#10b981',
                         backgroundColor: 'rgba(16, 185, 129, 0.1)',
                         borderWidth: 2,
@@ -328,7 +286,7 @@ function updateChart(inputs) {
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        title: { display: true, text: 'Buy Amount (oz)', font: { size: 12, weight: 'bold' } },
+                        title: { display: true, text: 'Additional Oz (oz)', font: { size: 12, weight: 'bold' } },
                         grid: { drawOnChartArea: false },
                     },
                 },
