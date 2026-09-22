@@ -152,8 +152,8 @@ function generateBuyingSchedule(inputs) {
         const newTotalPosition = currentPosition + additionalOzPurchased;
         const newLeverage = accountEquity > 0 ? (price * newTotalPosition) / accountEquity : 0;
 
-        // Only add to schedule if lots needed has changed (new threshold crossed)
-        if (lotsNeeded !== lastLotsNeeded) {
+        // Only add to schedule if lots needed has changed AND is positive (new threshold crossed and buying)
+        if (lotsNeeded > 0 && lotsNeeded !== lastLotsNeeded) {
             cumulativeLots += lotsNeeded;
             cumulativeOz += additionalOzPurchased;
             cumulativeCost += costToBuy;
