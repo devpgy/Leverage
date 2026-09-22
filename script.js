@@ -124,23 +124,56 @@ function calculateAtPrice(inputs, price) {
 
 // Generate buying schedule - all prices where action is needed
 function generateBuyingSchedule(inputs) {
-    const { entryPrice } = inputs;
+    const { entryPrice, cash, leverage } = inputs;
+    const LOT_SIZE = 5000;
+    const MIN_LOT = 0.01;
+
     const schedule = [];
+    let currentPosition = (cash * leverage) / entryPrice;  // Start with initial position
     let lastLotsNeeded = 0;
     let cumulativeLots = 0;
+    let cumulativeOz = 0;
+    let cumulativeCost = 0;
 
     // Generate prices from entry to $300 in $0.01 increments
     for (let price = Math.ceil(entryPrice * 100) / 100; price <= 300; price = Math.round((price + 0.01) * 100) / 100) {
-        const calc = calculateAtPrice(inputs, price);
+        // Calculate with CURRENT position (including all previous purchases)
+        const unrealizedPnl = (price - entryPrice) * currentPosition;
+        const accountEquity = cash + unrealizedPnl;
+        const currentNotional = price * currentPosition;
+        const currentLeverage = accountEquity > 0 ? currentNotional / accountEquity : 0;
+        const targetNotional = accountEquity * leverage;
+        const additionalOzNeeded = targetNotional > currentNotional ? (targetNotional - currentNotional) / price : 0;
 
-        // Only add to schedule if lots needed has changed (new 0.01 lot threshold)
-        if (calc.lotsNeeded !== lastLotsNeeded) {
+        // Round to nearest 0.01 lot
+        const lotsNeeded = additionalOzNeeded > 0 ? Math.ceil((additionalOzNeeded / LOT_SIZE) / MIN_LOT) * MIN_LOT : 0;
+        const additionalOzPurchased = lotsNeeded * LOT_SIZE;
+        const costToBuy = additionalOzPurchased * price;
+        const newTotalPosition = currentPosition + additionalOzPurchased;
+        const newLeverage = accountEquity > 0 ? (price * newTotalPosition) / accountEquity : 0;
+
+        // Only add to schedule if lots needed has changed (new threshold crossed)
+        if (lotsNeeded !== lastLotsNeeded) {
+            cumulativeLots += lotsNeeded;
+            cumulativeOz += additionalOzPurchased;
+            cumulativeCost += costToBuy;
+
             schedule.push({
                 price,
-                ...calc,
-                cumulativeLots: calc.lotsNeeded,
+                accountEquity,
+                currentLeverage,
+                lotsNeeded,
+                additionalOzPurchased,
+                costToBuy,
+                cumulativeLots,
+                cumulativeOz,
+                cumulativeCost,
+                newTotalPosition,
+                newLeverage,
             });
-            lastLotsNeeded = calc.lotsNeeded;
+
+            lastLotsNeeded = lotsNeeded;
+            currentPosition = newTotalPosition;  // Update position after buying
         }
     }
 
@@ -201,15 +234,7 @@ function updateBuyingScheduleTable(inputs) {
         const schedule = generateBuyingSchedule(inputs);
         console.log('Generated schedule with', schedule.length, 'entries');
 
-        let cumulativeLots = 0;
-        let cumulativeOz = 0;
-        let cumulativeCost = 0;
-
         schedule.forEach((entry, idx) => {
-            cumulativeLots += entry.lotsNeeded;
-            cumulativeOz += entry.additionalOzPurchased;
-            cumulativeCost += entry.costToBuy;
-
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${formatNumber(entry.price, 2)}</td>
@@ -218,9 +243,9 @@ function updateBuyingScheduleTable(inputs) {
                 <td>${formatNumber(entry.lotsNeeded, 2)} lots</td>
                 <td>${formatNumber(entry.additionalOzPurchased, 0)} oz</td>
                 <td>${formatCurrency(entry.costToBuy)}</td>
-                <td>${formatNumber(cumulativeLots, 2)} lots</td>
-                <td>${formatNumber(cumulativeOz, 0)} oz</td>
-                <td>${formatCurrency(cumulativeCost)}</td>
+                <td>${formatNumber(entry.cumulativeLots, 2)} lots</td>
+                <td>${formatNumber(entry.cumulativeOz, 0)} oz</td>
+                <td>${formatCurrency(entry.cumulativeCost)}</td>
                 <td>${formatNumber(entry.newTotalPosition, 0)} oz</td>
                 <td>${formatNumber(entry.newLeverage, 2)}x</td>
             `;
