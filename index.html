@@ -3,39 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leveraged Silver Position Calculator</title>
+    <title>Leveraged Silver Rebalancing Calculator</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🥈 Leveraged Silver Position Calculator</h1>
-            <p>Model a leveraged long silver position from $60 to $300</p>
+            <h1>🥈 Leveraged Silver Rebalancing Calculator</h1>
+            <p>Track when to buy more silver to maintain your target leverage as price rises</p>
         </header>
 
         <div class="main-grid">
             <!-- LEFT COLUMN: INPUTS -->
             <div class="inputs-section">
                 <div class="card">
-                    <h2>Input Parameters</h2>
+                    <h2>Initial Position Setup</h2>
 
                     <div class="input-group">
-                        <label for="cashInput">Cash Deposited ($)</label>
+                        <label for="cashInput">Starting Cash ($)</label>
                         <input type="number" id="cashInput" min="1000" step="1000" value="100000">
-                        <span class="input-hint">Total capital in your account</span>
+                        <span class="input-hint">Initial capital deployed</span>
                     </div>
 
                     <div class="input-group">
                         <label for="leverageInput">Target Leverage Multiple (x)</label>
                         <input type="number" id="leverageInput" min="1" max="50" step="0.5" value="5">
-                        <span class="input-hint">e.g., 5x = $5 notional per $1 equity</span>
+                        <span class="input-hint">e.g., 5x = maintain $5 notional per $1 equity</span>
                     </div>
 
                     <div class="input-group">
-                        <label for="priceInput">Current Silver Price ($/oz)</label>
-                        <input type="number" id="priceInput" min="1" step="0.01" value="60">
-                        <span class="input-hint">Entry price</span>
+                        <label for="entryPriceInput">Entry Silver Price ($/oz)</label>
+                        <input type="number" id="entryPriceInput" min="1" step="0.01" value="60">
+                        <span class="input-hint">Price when you open the initial position</span>
                     </div>
 
                     <button class="reset-btn" onclick="resetInputs()">Reset to Defaults</button>
@@ -45,12 +45,12 @@
             <!-- RIGHT COLUMN: SUMMARY -->
             <div class="summary-section">
                 <div class="card">
-                    <h2>Position Summary</h2>
+                    <h2>Initial Position Summary</h2>
 
                     <div class="summary-grid">
                         <div class="summary-item">
-                            <div class="summary-label">Position Size</div>
-                            <div class="summary-value" id="positionSize">-</div>
+                            <div class="summary-label">Initial Position Size</div>
+                            <div class="summary-value" id="initialOunces">-</div>
                             <div class="summary-unit">oz</div>
                         </div>
 
@@ -61,27 +61,15 @@
                         </div>
 
                         <div class="summary-item">
-                            <div class="summary-label">Max Loss to Maintain Leverage</div>
-                            <div class="summary-value" id="maxLoss">-</div>
+                            <div class="summary-label">Leverage Multiple</div>
+                            <div class="summary-value" id="initialLeverage">-</div>
+                            <div class="summary-unit">x</div>
+                        </div>
+
+                        <div class="summary-item">
+                            <div class="summary-label">Equity at Risk</div>
+                            <div class="summary-value" id="equityAtRisk">-</div>
                             <div class="summary-unit">$</div>
-                        </div>
-
-                        <div class="summary-item">
-                            <div class="summary-label">Initial Stop Price</div>
-                            <div class="summary-value" id="initStop">-</div>
-                            <div class="summary-unit">$/oz</div>
-                        </div>
-
-                        <div class="summary-item">
-                            <div class="summary-label">Buffer Below Entry</div>
-                            <div class="summary-value" id="bufferPct">-</div>
-                            <div class="summary-unit">%</div>
-                        </div>
-
-                        <div class="summary-item">
-                            <div class="summary-label">Risk per Leverage Unit</div>
-                            <div class="summary-value" id="riskPerUnit">-</div>
-                            <div class="summary-unit">$/oz</div>
                         </div>
                     </div>
                 </div>
@@ -90,34 +78,35 @@
 
         <!-- CHART -->
         <div class="card chart-card">
-            <h2>Stop Level Progression</h2>
+            <h2>Position Growth & Rebalancing</h2>
             <div class="chart-container">
-                <canvas id="stopChart"></canvas>
+                <canvas id="rebalanceChart"></canvas>
             </div>
-            <p class="chart-hint">As silver rises, your stop moves up to maintain the leverage ratio while growing with your equity</p>
+            <p class="chart-hint">Shows your position size growth and cumulative additional oz needed to maintain leverage</p>
         </div>
 
-        <!-- PRICE SCENARIOS TABLE -->
+        <!-- REBALANCING TABLE -->
         <div class="card">
-            <h2>Price Scenarios & Stop Levels</h2>
-            <p class="table-hint">Track where your stop should be at each price level. Move your stop up as price rises to maintain leverage.</p>
+            <h2>When to Buy More Silver</h2>
+            <p class="table-hint">At each price point, shows your current leverage and exactly how many ounces to buy to get back to 5x. Shows cumulative purchase plan.</p>
 
             <div class="table-wrapper">
-                <table id="scenariosTable">
+                <table id="rebalanceTable">
                     <thead>
                         <tr>
                             <th>Silver Price</th>
-                            <th>Entry Price</th>
-                            <th>Position Size</th>
+                            <th>Initial Position</th>
                             <th>Unrealized P&L</th>
                             <th>Account Equity</th>
-                            <th>Leverage Ratio</th>
-                            <th>Max Loss Allowed</th>
-                            <th>Required Stop</th>
-                            <th>Buffer to Stop</th>
+                            <th>Current Leverage</th>
+                            <th>Current Notional</th>
+                            <th>Target Notional</th>
+                            <th>Additional Oz Needed</th>
+                            <th>Cost to Buy</th>
+                            <th>Total Position</th>
                         </tr>
                     </thead>
-                    <tbody id="scenariosBody">
+                    <tbody id="rebalanceBody">
                     </tbody>
                 </table>
             </div>
@@ -128,44 +117,58 @@
             <h2>How to Use This Model</h2>
 
             <div class="instruction-section">
-                <h3>1. Enter Your Parameters</h3>
-                <p>Update the three input fields on the left. The model recalculates in real-time.</p>
+                <h3>1. Enter Your Initial Position</h3>
+                <p>Set your starting cash, target leverage, and entry price for silver. This determines your initial position size.</p>
             </div>
 
             <div class="instruction-section">
-                <h3>2. Understand Your Position</h3>
-                <p><strong>Position Size:</strong> Number of ounces you control with your capital and leverage.</p>
-                <p><strong>Notional Exposure:</strong> Total market value you're exposed to (Cash × Leverage).</p>
-                <p><strong>Max Loss:</strong> Dollar amount you can lose before hitting your leverage limit (Equity ÷ Leverage).</p>
-                <p><strong>Initial Stop:</strong> Where your first stop should be placed.</p>
+                <h3>2. Understand the Problem</h3>
+                <p>When silver rises, your unrealized gains increase your account equity. But since your position size stays the same, your leverage ratio drops.</p>
+                <p><strong>Example:</strong> With 5x leverage at $60, you have 8,333 oz. At $100, you've made $333k, so your equity is now $433k. Your leverage is now only $833k / $433k = 1.92x.</p>
             </div>
 
             <div class="instruction-section">
-                <h3>3. Use the Price Scenarios Table</h3>
-                <p>The table shows what happens at different price levels. The <strong>Required Stop</strong> column tells you where to place your stop at each price.</p>
-                <p>For example: If silver reaches $100, your stop should be around the $100 row's "Required Stop" price.</p>
-                <p>As silver rises and you make gains, your equity grows, so your dollar risk budget increases—your stop moves higher.</p>
-            </div>
-
-            <div class="instruction-section">
-                <h3>4. Key Concept: Maintaining Leverage</h3>
-                <p>This model maintains <strong>constant leverage ratio</strong> by adjusting your stop as your equity grows:</p>
+                <h3>3. Use the Rebalancing Table</h3>
+                <p>The table shows, at each price level:</p>
                 <ul>
-                    <li><strong>Max Loss = Account Equity ÷ Leverage Multiple</strong></li>
-                    <li><strong>Stop Price = Current Price − (Max Loss ÷ Position Size)</strong></li>
-                    <li>As price rises → equity grows → max loss grows → stop moves higher</li>
+                    <li><strong>Current Leverage:</strong> Your actual leverage ratio with current position</li>
+                    <li><strong>Additional Oz Needed:</strong> How many oz to buy at this price to get back to 5x</li>
+                    <li><strong>Cost to Buy:</strong> How much capital required for that purchase</li>
+                    <li><strong>Total Position:</strong> Your new position size after rebalancing</li>
                 </ul>
             </div>
 
             <div class="instruction-section">
-                <h3>5. Risk Management</h3>
-                <p>If silver hits your required stop price, you'll lose exactly (Account Equity ÷ Leverage), maintaining your leverage discipline.</p>
-                <p>Higher leverage = bigger position = more profit potential AND greater risk. Use accordingly.</p>
+                <h3>4. Key Formula</h3>
+                <p>To maintain 5x leverage as your equity grows:</p>
+                <ul>
+                    <li><strong>Target Notional = Account Equity × Leverage Multiple</strong></li>
+                    <li><strong>Current Notional = Current Position Size × Current Price</strong></li>
+                    <li><strong>Additional Oz = (Target Notional − Current Notional) / Current Price</strong></li>
+                </ul>
+            </div>
+
+            <div class="instruction-section">
+                <h3>5. Trading Strategy</h3>
+                <p>As silver rises:</p>
+                <ol>
+                    <li>Check the rebalancing table at the current price</li>
+                    <li>See how many additional oz you need</li>
+                    <li>Calculate the cost (shown in "Cost to Buy")</li>
+                    <li>If you have capital available, buy that amount to rebalance</li>
+                    <li>Your position size increases, maintaining your 5x leverage</li>
+                </ol>
+                <p>This pyramids your position up as silver rises, capturing more upside while maintaining constant leverage discipline.</p>
+            </div>
+
+            <div class="instruction-section">
+                <h3>6. Capital Requirements</h3>
+                <p>Note that each rebalancing requires additional capital (margin or fresh cash). The model assumes you have access to enough margin to support these additional purchases at your target leverage.</p>
             </div>
         </div>
 
         <footer>
-            <p>Built for tracking leveraged commodity positions. Always verify with your broker's margin requirements.</p>
+            <p>Built for tracking leverage rebalancing in commodity trading. Verify with your broker's margin requirements and available capital.</p>
         </footer>
     </div>
 
