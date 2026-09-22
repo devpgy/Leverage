@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leveraged Silver Position Calculator</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🥈 Leveraged Silver Position Calculator</h1>
+            <p>Model a leveraged long silver position from $60 to $300</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- LEFT COLUMN: INPUTS -->
+            <div class="inputs-section">
+                <div class="card">
+                    <h2>Input Parameters</h2>
+
+                    <div class="input-group">
+                        <label for="cashInput">Cash Deposited ($)</label>
+                        <input type="number" id="cashInput" min="1000" step="1000" value="100000">
+                        <span class="input-hint">Total capital in your account</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="leverageInput">Target Leverage Multiple (x)</label>
+                        <input type="number" id="leverageInput" min="1" max="50" step="0.5" value="5">
+                        <span class="input-hint">e.g., 5x = $5 notional per $1 equity</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="priceInput">Current Silver Price ($/oz)</label>
+                        <input type="number" id="priceInput" min="1" step="0.01" value="60">
+                        <span class="input-hint">Entry price</span>
+                    </div>
+
+                    <button class="reset-btn" onclick="resetInputs()">Reset to Defaults</button>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: SUMMARY -->
+            <div class="summary-section">
+                <div class="card">
+                    <h2>Position Summary</h2>
+
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-label">Position Size</div>
+                            <div class="summary-value" id="positionSize">-</div>
+                            <div class="summary-unit">oz</div>
+                        </div>
+
+                        <div class="summary-item">
+                            <div class="summary-label">Notional Exposure</div>
+                            <div class="summary-value" id="notionalValue">-</div>
+                            <div class="summary-unit">$</div>
+                        </div>
+
+                        <div class="summary-item">
+                            <div class="summary-label">Max Loss to Maintain Leverage</div>
+                            <div class="summary-value" id="maxLoss">-</div>
+                            <div class="summary-unit">$</div>
+                        </div>
+
+                        <div class="summary-item">
+                            <div class="summary-label">Initial Stop Price</div>
+                            <div class="summary-value" id="initStop">-</div>
+                            <div class="summary-unit">$/oz</div>
+                        </div>
+
+                        <div class="summary-item">
+                            <div class="summary-label">Buffer Below Entry</div>
+                            <div class="summary-value" id="bufferPct">-</div>
+                            <div class="summary-unit">%</div>
+                        </div>
+
+                        <div class="summary-item">
+                            <div class="summary-label">Risk per Leverage Unit</div>
+                            <div class="summary-value" id="riskPerUnit">-</div>
+                            <div class="summary-unit">$/oz</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHART -->
+        <div class="card chart-card">
+            <h2>Stop Level Progression</h2>
+            <div class="chart-container">
+                <canvas id="stopChart"></canvas>
+            </div>
+            <p class="chart-hint">As silver rises, your stop moves up to maintain the leverage ratio while growing with your equity</p>
+        </div>
+
+        <!-- PRICE SCENARIOS TABLE -->
+        <div class="card">
+            <h2>Price Scenarios & Stop Levels</h2>
+            <p class="table-hint">Track where your stop should be at each price level. Move your stop up as price rises to maintain leverage.</p>
+
+            <div class="table-wrapper">
+                <table id="scenariosTable">
+                    <thead>
+                        <tr>
+                            <th>Silver Price</th>
+                            <th>Entry Price</th>
+                            <th>Position Size</th>
+                            <th>Unrealized P&L</th>
+                            <th>Account Equity</th>
+                            <th>Leverage Ratio</th>
+                            <th>Max Loss Allowed</th>
+                            <th>Required Stop</th>
+                            <th>Buffer to Stop</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scenariosBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- INSTRUCTIONS -->
+        <div class="card instructions-card">
+            <h2>How to Use This Model</h2>
+
+            <div class="instruction-section">
+                <h3>1. Enter Your Parameters</h3>
+                <p>Update the three input fields on the left. The model recalculates in real-time.</p>
+            </div>
+
+            <div class="instruction-section">
+                <h3>2. Understand Your Position</h3>
+                <p><strong>Position Size:</strong> Number of ounces you control with your capital and leverage.</p>
+                <p><strong>Notional Exposure:</strong> Total market value you're exposed to (Cash × Leverage).</p>
+                <p><strong>Max Loss:</strong> Dollar amount you can lose before hitting your leverage limit (Equity ÷ Leverage).</p>
+                <p><strong>Initial Stop:</strong> Where your first stop should be placed.</p>
+            </div>
+
+            <div class="instruction-section">
+                <h3>3. Use the Price Scenarios Table</h3>
+                <p>The table shows what happens at different price levels. The <strong>Required Stop</strong> column tells you where to place your stop at each price.</p>
+                <p>For example: If silver reaches $100, your stop should be around the $100 row's "Required Stop" price.</p>
+                <p>As silver rises and you make gains, your equity grows, so your dollar risk budget increases—your stop moves higher.</p>
+            </div>
+
+            <div class="instruction-section">
+                <h3>4. Key Concept: Maintaining Leverage</h3>
+                <p>This model maintains <strong>constant leverage ratio</strong> by adjusting your stop as your equity grows:</p>
+                <ul>
+                    <li><strong>Max Loss = Account Equity ÷ Leverage Multiple</strong></li>
+                    <li><strong>Stop Price = Current Price − (Max Loss ÷ Position Size)</strong></li>
+                    <li>As price rises → equity grows → max loss grows → stop moves higher</li>
+                </ul>
+            </div>
+
+            <div class="instruction-section">
+                <h3>5. Risk Management</h3>
+                <p>If silver hits your required stop price, you'll lose exactly (Account Equity ÷ Leverage), maintaining your leverage discipline.</p>
+                <p>Higher leverage = bigger position = more profit potential AND greater risk. Use accordingly.</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>Built for tracking leveraged commodity positions. Always verify with your broker's margin requirements.</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
