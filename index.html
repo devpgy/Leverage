@@ -78,32 +78,33 @@
 
         <!-- CHART -->
         <div class="card chart-card">
-            <h2>Position Growth & Rebalancing</h2>
+            <h2>Position Growth as You Scale Up</h2>
             <div class="chart-container">
-                <canvas id="rebalanceChart"></canvas>
+                <canvas id="buyingChart"></canvas>
             </div>
-            <p class="chart-hint">Shows your position size growth and cumulative additional oz needed to maintain leverage</p>
+            <p class="chart-hint">Shows your position size growth and buy amounts at each rebalancing point (first 100 price levels)</p>
         </div>
 
-        <!-- REBALANCING TABLE -->
+        <!-- BUYING SCHEDULE TABLE -->
         <div class="card">
-            <h2>When to Buy More Silver</h2>
-            <p class="table-hint">At each price point, shows your current leverage and exactly how many ounces to buy to get back to 5x. Shows cumulative purchase plan.</p>
+            <h2>Your Buying Schedule: Every Price Where Action is Needed</h2>
+            <p class="table-hint">Shows every silver price (to the cent) where you buy more to maintain your target leverage. Tracks cumulative lots and position growth.</p>
 
             <div class="table-wrapper">
-                <table id="rebalanceTable">
+                <table id="buyingScheduleTable">
                     <thead>
                         <tr>
                             <th>Silver Price</th>
-                            <th>Initial Position</th>
-                            <th>Unrealized P&L</th>
                             <th>Account Equity</th>
                             <th>Current Leverage</th>
-                            <th>Current Notional</th>
-                            <th>Target Notional</th>
-                            <th>Additional Oz Needed</th>
-                            <th>Cost to Buy</th>
-                            <th>Total Position</th>
+                            <th>Buy This Many Lots</th>
+                            <th>Buy This Many Oz</th>
+                            <th>Cost of This Buy</th>
+                            <th>Total Lots (cumulative)</th>
+                            <th>Total Oz (cumulative)</th>
+                            <th>Total $ (cumulative)</th>
+                            <th>Your New Position</th>
+                            <th>New Leverage</th>
                         </tr>
                     </thead>
                     <tbody id="rebalanceBody">
