@@ -235,6 +235,7 @@ thead th {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
 }
 
 thead th:first-child {
@@ -264,6 +265,17 @@ tbody tr:nth-child(even) {
     background: rgba(0, 0, 0, 0.01);
 }
 
+/* Highlight additional oz needed column */
+tbody td:nth-child(8) {
+    background: rgba(16, 185, 129, 0.1);
+    font-weight: 600;
+    color: var(--success);
+}
+
+tbody tr:nth-child(even) td:nth-child(8) {
+    background: rgba(16, 185, 129, 0.15);
+}
+
 /* INSTRUCTIONS */
 .instructions-card {
     background: linear-gradient(135deg, rgba(30, 64, 175, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
@@ -284,7 +296,7 @@ tbody tr:nth-child(even) {
     color: var(--text-primary);
 }
 
-.instruction-section ul {
+.instruction-section ul, .instruction-section ol {
     margin-left: 20px;
     margin-top: 8px;
     margin-bottom: 8px;

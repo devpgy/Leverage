@@ -1,121 +1,106 @@
-# 🥈 Leveraged Silver Position Calculator
+# 🥈 Leveraged Silver Rebalancing Calculator
 
-A professional web app for modeling leveraged long silver positions. Track your position sizing, P&L, and required stop levels as silver price moves from $60 to $300.
+A professional web app for tracking when to buy additional silver to maintain your target leverage as the price rises.
+
+## The Problem
+
+When you open a leveraged position at a price (e.g., 5x leverage at $60), your leverage ratio drops as the price rises and you profit:
+
+- **At $60**: 8,333 oz × 5x = $500k notional / $100k equity = 5x leverage ✓
+- **At $100**: 8,333 oz × 1x = $833k notional / $433k equity = 1.92x leverage ✗
+
+Your equity grows (you make gains) but your position size stays the same, so leverage falls.
+
+## The Solution
+
+This app tells you **exactly when and how much to buy** to maintain constant 5x leverage:
+
+- **At $100**: Buy 13,320 more oz → Total 21,653 oz → $2.165M / $433k = 5x ✓
+- **At $200**: Buy more as equity grows further → Keep rebalancing to maintain discipline
 
 ## Features
 
-- **Real-time Calculations**: All metrics update instantly as you adjust inputs
-- **Position Summary**: Quick overview of position size, notional exposure, and risk
-- **Price Scenarios Table**: 13 price levels showing P&L, equity, and required stops
-- **Interactive Chart**: Visual tracking of stop level progression
-- **Data Persistence**: Your inputs are saved to browser storage
-- **Fully Responsive**: Works on desktop, tablet, and mobile
-- **No Backend Required**: Pure client-side app, easy to host anywhere
+✅ Real-time calculations as you adjust inputs
+✅ Initial position summary (size, notional, leverage)
+✅ Interactive rebalancing table showing exact purchases needed
+✅ Three-axis chart showing:
+  - Your growing position size
+  - Cumulative additional oz to purchase
+  - Current leverage ratio deterioration without rebalancing
+✅ Exact prices (not rounded to $5 increments)
+✅ 0.01 oz minimum lot sizing
+✅ Browser storage persists your inputs
+✅ Fully responsive design
 
 ## How It Works
 
-1. Enter your cash, leverage multiple, and entry price
-2. View your position metrics instantly
-3. Check the scenarios table to see where your stops should be at each price level
-4. As silver rises, your equity grows and your stops move higher to maintain leverage
+**Input:**
+- Starting cash: $100,000
+- Target leverage: 5x
+- Entry price: $60
 
-### Key Formula
+**The app shows at each price level:**
+- Your account equity (cash + unrealized P&L)
+- Current leverage ratio (what you'd have if you don't rebalance)
+- Exactly how many oz to buy to get back to 5x
+- Cost in dollars for that purchase
+- Your new total position size
 
-The model maintains a constant leverage ratio by adjusting your stop:
+**Example at $100:**
+- Unrealized P&L: +$333,000
+- Account equity: $433,000
+- Current leverage: 1.92x (unbalanced)
+- **Additional oz needed: 13,320 oz**
+- **Cost to buy: $1,332,000**
+- New total position: 21,653 oz
+- New leverage: 5.0x ✓
+
+## Key Formula
 
 ```
-Max Loss Allowed = Account Equity ÷ Leverage Multiple
-Required Stop = Current Price - (Max Loss ÷ Position Size)
+Target Notional = Account Equity × Leverage Multiple
+Additional Oz = (Target Notional − Current Notional) / Current Price
 ```
 
-As your equity grows with profits, your stop moves higher proportionally.
+As your account grows from gains, the additional oz needed also grows—you're pyramiding your position up.
 
-## Deploy to Cloudflare Pages
+## Trading Strategy
 
-### Step 1: Create a GitHub Repository
+1. **Start**: Open initial leveraged position at your entry price
+2. **Monitor**: Watch the rebalancing table
+3. **Execute**: When you're comfortable (not necessarily at every price point):
+   - Check the table at current price
+   - See how many oz to buy
+   - Check if you have margin/capital available
+   - Execute the purchase
+4. **Rebalance**: Your new position size maintains your target leverage
+5. **Repeat**: As silver continues rising, keep rebalancing
 
-1. Go to [github.com/new](https://github.com/new)
-2. Create a new repository (e.g., `silver-position-calc`)
-3. Clone it locally:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/silver-position-calc.git
-   cd silver-position-calc
-   ```
+This keeps your leverage constant while pyramiding up for maximum upside capture.
 
-### Step 2: Add Files
+## Deployment
 
-Copy these three files to your repo:
-- `index.html`
-- `style.css`
-- `script.js`
-- `README.md`
+See `DEPLOYMENT_GUIDE.md` for step-by-step GitHub + Cloudflare Pages setup (takes 5 minutes).
 
-### Step 3: Commit and Push
+## Features
 
-```bash
-git add .
-git commit -m "Initial commit: Leveraged silver position calculator"
-git push origin main
-```
-
-### Step 4: Deploy to Cloudflare Pages
-
-1. Go to [dash.cloudflare.com](https://dash.cloudflare.com)
-2. Navigate to **Pages** → **Create a project**
-3. Connect your GitHub account
-4. Select your repository
-5. Set **Build settings**:
-   - Framework: **None**
-   - Build command: (leave blank)
-   - Build output directory: `/` (root)
-6. Click **Save and Deploy**
-
-### Step 5: Share Your Link
-
-Once deployed, Cloudflare will give you a URL like:
-```
-https://silver-position-calc.pages.dev
-```
-
-Share this link with your friend!
-
-## Alternative Hosting Options
-
-If you don't want to use Cloudflare Pages:
-
-- **GitHub Pages**: Free, easy setup (just enable Pages in repo settings)
-- **Netlify**: Free tier with continuous deployment
-- **Vercel**: Free tier with excellent performance
-- **Any static host**: Upload the three files to any web server
-
-## Customization
-
-You can easily customize:
-
-- **Default values**: Edit `value="60"` in the HTML inputs
-- **Price scenarios**: Modify the `priceScenarios` array in `script.js`
-- **Colors**: Change CSS variables in `style.css` (`:root` section)
-- **Title and branding**: Edit header text in `index.html`
-
-## Browser Compatibility
-
-Works on all modern browsers:
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
+- **Exact Prices**: Dynamic price scenarios from entry to $300, not just $5 increments
+- **Precise Lot Sizing**: All calculations rounded to 0.01 oz minimum
+- **Three Views**:
+  - Position summary
+  - Detailed rebalancing table
+  - Multi-axis chart
+- **Fully Responsive**: Works on desktop, tablet, mobile
+- **No Backend**: Pure client-side, instant updates
+- **Data Persistence**: Your inputs saved locally
 
 ## Notes
 
-- Data is saved in your browser's localStorage (survives page refreshes)
-- No personal data is sent anywhere
-- Calculations are done 100% client-side
-- Compatible with any screen size
-
-## License
-
-Free to use and modify. Share with friends!
+- This model assumes constant leverage rebalancing (you buy at every (or many) price points)
+- Each rebalance requires additional capital (either margin or fresh cash)
+- Verify with your broker on margin requirements and available leverage
+- Manage risk appropriately—don't over-leverage beyond your comfort level
 
 ---
 
-**Questions or feedback?** Feel free to modify the code or submit issues.
+Built for tracking leveraged commodity positions. Use with caution and verify all calculations with your broker.

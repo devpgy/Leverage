@@ -11,10 +11,6 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
-# Node (if you ever add build tools)
-node_modules/
-package-lock.json
-
 # Logs
 *.log
 npm-debug.log*

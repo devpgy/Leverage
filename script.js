@@ -1,25 +1,27 @@
 // Storage key for localStorage
-const STORAGE_KEY = 'silver-lever-inputs';
+const STORAGE_KEY = 'silver-lever-rebalance-inputs';
 
 // Chart instance
-let stopChart = null;
+let rebalanceChart = null;
 
-// Price scenarios
-const priceScenarios = [60, 65, 70, 75, 80, 90, 100, 120, 150, 180, 200, 250, 300];
+// Price scenarios - can be customized
+let priceScenarios = [];
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadInputs();
     setupInputListeners();
+    generatePriceScenarios();
     updateAll();
 });
 
 // Setup input listeners
 function setupInputListeners() {
-    const inputs = ['cashInput', 'leverageInput', 'priceInput'];
+    const inputs = ['cashInput', 'leverageInput', 'entryPriceInput'];
     inputs.forEach(id => {
         document.getElementById(id).addEventListener('input', () => {
             saveInputs();
+            generatePriceScenarios();
             updateAll();
         });
     });
@@ -30,7 +32,7 @@ function saveInputs() {
     const data = {
         cash: document.getElementById('cashInput').value,
         leverage: document.getElementById('leverageInput').value,
-        price: document.getElementById('priceInput').value,
+        entryPrice: document.getElementById('entryPriceInput').value,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
@@ -43,7 +45,7 @@ function loadInputs() {
             const data = JSON.parse(stored);
             document.getElementById('cashInput').value = data.cash || 100000;
             document.getElementById('leverageInput').value = data.leverage || 5;
-            document.getElementById('priceInput').value = data.price || 60;
+            document.getElementById('entryPriceInput').value = data.entryPrice || 60;
         } catch (e) {
             console.error('Error loading stored inputs:', e);
         }
@@ -54,8 +56,9 @@ function loadInputs() {
 function resetInputs() {
     document.getElementById('cashInput').value = 100000;
     document.getElementById('leverageInput').value = 5;
-    document.getElementById('priceInput').value = 60;
+    document.getElementById('entryPriceInput').value = 60;
     saveInputs();
+    generatePriceScenarios();
     updateAll();
 }
 
@@ -64,64 +67,106 @@ function getInputs() {
     return {
         cash: parseFloat(document.getElementById('cashInput').value) || 100000,
         leverage: parseFloat(document.getElementById('leverageInput').value) || 5,
-        price: parseFloat(document.getElementById('priceInput').value) || 60,
+        entryPrice: parseFloat(document.getElementById('entryPriceInput').value) || 60,
     };
 }
 
-// Calculate position metrics
-function calculateMetrics(inputs) {
-    const { cash, leverage, price } = inputs;
+// Generate price scenarios dynamically based on entry price
+function generatePriceScenarios() {
+    const inputs = getInputs();
+    const entry = inputs.entryPrice;
 
-    const positionSize = (cash * leverage) / price;
+    // Generate scenarios from entry to $300 with varying step sizes
+    priceScenarios = [];
+
+    // From entry to +50%: $1 increments
+    for (let p = entry; p <= entry * 1.5; p += 1) {
+        priceScenarios.push(Math.round(p * 100) / 100);
+    }
+
+    // From +50% to +150%: $5 increments
+    for (let p = Math.ceil((entry * 1.5) / 5) * 5; p <= entry * 2.5; p += 5) {
+        if (p > entry * 1.5) priceScenarios.push(p);
+    }
+
+    // From +150% to $300: $10 increments
+    for (let p = Math.ceil((entry * 2.5) / 10) * 10; p <= 300; p += 10) {
+        if (p > entry * 2.5) priceScenarios.push(p);
+    }
+
+    // Ensure $300 is included
+    if (!priceScenarios.includes(300)) {
+        priceScenarios.push(300);
+    }
+
+    priceScenarios.sort((a, b) => a - b);
+}
+
+// Calculate initial position metrics
+function calculateInitialPosition(inputs) {
+    const { cash, leverage, entryPrice } = inputs;
+
+    const positionSize = (cash * leverage) / entryPrice;
     const notional = cash * leverage;
-    const maxLoss = cash / leverage;
-    const riskPerOz = maxLoss / positionSize;
-    const initialStop = price - riskPerOz;
-    const bufferPct = (price - initialStop) / price;
 
     return {
         positionSize,
         notional,
-        maxLoss,
-        riskPerOz,
-        initialStop,
-        bufferPct,
+        leverage,
     };
 }
 
-// Calculate scenario at price
-function calculateScenario(inputs, scenarioPrice) {
-    const { cash, leverage } = inputs;
-    const { positionSize, notional, maxLoss: initialMaxLoss } = calculateMetrics(inputs);
+// Calculate rebalancing scenario at a given price
+function calculateRebalancingScenario(inputs, scenarioPrice) {
+    const { cash, leverage, entryPrice } = inputs;
+    const initial = calculateInitialPosition(inputs);
 
-    // Unrealized P&L
-    const unrealizedPnl = (scenarioPrice - inputs.price) * positionSize;
+    // Current position (hasn't changed - still the initial position)
+    const currentPositionSize = initial.positionSize;
 
-    // Account Equity
+    // Unrealized P&L from initial position
+    const unrealizedPnl = (scenarioPrice - entryPrice) * currentPositionSize;
+
+    // Account equity
     const accountEquity = cash + unrealizedPnl;
 
-    // Current Leverage Ratio (Notional / Equity)
-    const currentLeverage = notional / accountEquity;
+    // Current notional (price × position)
+    const currentNotional = scenarioPrice * currentPositionSize;
 
-    // Max Loss Allowed (to maintain leverage ratio)
-    const maxLossAllowed = accountEquity / leverage;
+    // Current leverage ratio
+    const currentLeverage = currentNotional / accountEquity;
 
-    // Required Stop Price
-    const requiredStop = scenarioPrice - (maxLossAllowed / positionSize);
+    // Target notional to maintain target leverage
+    const targetNotional = accountEquity * leverage;
 
-    // Buffer to Stop
-    const bufferToStop = scenarioPrice - requiredStop;
+    // Additional oz needed to reach target
+    let additionalOzNeeded = (targetNotional - currentNotional) / scenarioPrice;
+
+    // Round to 0.01 oz minimum
+    additionalOzNeeded = Math.ceil(additionalOzNeeded * 100) / 100;
+
+    // Cost to buy additional oz
+    const costToBuy = additionalOzNeeded * scenarioPrice;
+
+    // New total position after rebalancing
+    const newTotalPosition = currentPositionSize + additionalOzNeeded;
+
+    // New leverage after rebalancing
+    const newLeverage = (scenarioPrice * newTotalPosition) / accountEquity;
 
     return {
         price: scenarioPrice,
-        entryPrice: inputs.price,
-        positionSize,
+        entryPrice,
+        initialPosition: currentPositionSize,
         unrealizedPnl,
         accountEquity,
         currentLeverage,
-        maxLossAllowed,
-        requiredStop,
-        bufferToStop,
+        currentNotional,
+        targetNotional,
+        additionalOzNeeded,
+        costToBuy,
+        newTotalPosition,
+        newLeverage,
     };
 }
 
@@ -145,41 +190,43 @@ function formatNumber(value, decimals = 2) {
     }).format(value);
 }
 
-// Format percentage
-function formatPercent(value) {
+// Format oz with minimum 0.01
+function formatOunces(value) {
     if (value === null || value === undefined) return '-';
-    return (value * 100).toFixed(1) + '%';
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(value) + ' oz';
 }
 
 // Update summary section
-function updateSummary(inputs, metrics) {
-    document.getElementById('positionSize').textContent = formatNumber(metrics.positionSize, 0);
-    document.getElementById('notionalValue').textContent = formatCurrency(metrics.notional);
-    document.getElementById('maxLoss').textContent = formatCurrency(metrics.maxLoss);
-    document.getElementById('initStop').textContent = formatCurrency(metrics.initialStop);
-    document.getElementById('bufferPct').textContent = formatPercent(metrics.bufferPct);
-    document.getElementById('riskPerUnit').textContent = formatCurrency(metrics.riskPerOz);
+function updateSummary(inputs, initial) {
+    document.getElementById('initialOunces').textContent = formatNumber(initial.positionSize, 0);
+    document.getElementById('notionalValue').textContent = formatCurrency(initial.notional);
+    document.getElementById('initialLeverage').textContent = formatNumber(initial.leverage, 1) + 'x';
+    document.getElementById('equityAtRisk').textContent = formatCurrency(inputs.cash);
 }
 
-// Update scenarios table
-function updateScenariosTable(inputs) {
-    const tbody = document.getElementById('scenariosBody');
+// Update rebalancing table
+function updateRebalancingTable(inputs) {
+    const tbody = document.getElementById('rebalanceBody');
     tbody.innerHTML = '';
 
-    priceScenarios.forEach(scenarioPrice => {
-        const scenario = calculateScenario(inputs, scenarioPrice);
+    priceScenarios.forEach(price => {
+        const scenario = calculateRebalancingScenario(inputs, price);
 
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${formatCurrency(scenario.price)}</td>
-            <td>${formatCurrency(scenario.entryPrice)}</td>
-            <td>${formatNumber(scenario.positionSize, 0)}</td>
+            <td>${formatNumber(scenario.initialPosition, 0)}</td>
             <td>${formatCurrency(scenario.unrealizedPnl)}</td>
             <td>${formatCurrency(scenario.accountEquity)}</td>
             <td>${formatNumber(scenario.currentLeverage, 2)}x</td>
-            <td>${formatCurrency(scenario.maxLossAllowed)}</td>
-            <td>${formatCurrency(scenario.requiredStop)}</td>
-            <td>${formatCurrency(scenario.bufferToStop)}</td>
+            <td>${formatCurrency(scenario.currentNotional)}</td>
+            <td>${formatCurrency(scenario.targetNotional)}</td>
+            <td>${formatOunces(scenario.additionalOzNeeded)}</td>
+            <td>${formatCurrency(scenario.costToBuy)}</td>
+            <td>${formatNumber(scenario.newTotalPosition, 0)}</td>
         `;
         tbody.appendChild(row);
     });
@@ -187,60 +234,63 @@ function updateScenariosTable(inputs) {
 
 // Update chart
 function updateChart(inputs) {
-    const chartData = priceScenarios.map(price => calculateScenario(inputs, price));
+    const chartData = priceScenarios.map(price => calculateRebalancingScenario(inputs, price));
+    const initial = calculateInitialPosition(inputs);
 
-    const ctx = document.getElementById('stopChart').getContext('2d');
+    const ctx = document.getElementById('rebalanceChart').getContext('2d');
 
-    if (stopChart) {
-        stopChart.destroy();
+    if (rebalanceChart) {
+        rebalanceChart.destroy();
     }
 
-    stopChart = new Chart(ctx, {
+    rebalanceChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: chartData.map(d => '$' + d.price.toFixed(0)),
+            labels: chartData.map(d => '$' + d.price.toFixed(2)),
             datasets: [
                 {
-                    label: 'Silver Price',
-                    data: chartData.map(d => d.price),
+                    label: 'Your Position Size',
+                    data: chartData.map(d => d.newTotalPosition),
                     borderColor: '#1e40af',
                     backgroundColor: 'rgba(30, 64, 175, 0.05)',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.4,
-                    pointRadius: 5,
+                    pointRadius: 4,
                     pointBackgroundColor: '#1e40af',
                     pointBorderColor: '#ffffff',
                     pointBorderWidth: 2,
                     yAxisID: 'y',
                 },
                 {
-                    label: 'Required Stop Price',
-                    data: chartData.map(d => d.requiredStop),
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.05)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 5,
-                    pointBackgroundColor: '#ef4444',
-                    pointBorderColor: '#ffffff',
-                    pointBorderWidth: 2,
-                    yAxisID: 'y',
-                },
-                {
-                    label: 'Buffer to Stop ($)',
-                    data: chartData.map(d => d.bufferToStop),
+                    label: 'Additional Oz to Buy (cumulative)',
+                    data: chartData.map((d, idx) => {
+                        // Cumulative sum
+                        return chartData.slice(0, idx + 1).reduce((sum, s) => sum + s.additionalOzNeeded, 0);
+                    }),
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.05)',
                     borderWidth: 2,
-                    fill: false,
+                    fill: true,
                     tension: 0.4,
-                    pointRadius: 4,
+                    pointRadius: 3,
                     pointBackgroundColor: '#10b981',
                     pointBorderColor: '#ffffff',
                     pointBorderWidth: 2,
                     yAxisID: 'y1',
+                },
+                {
+                    label: 'Current Leverage Ratio',
+                    data: chartData.map(d => d.currentLeverage),
+                    borderColor: '#ef4444',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#ef4444',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    yAxisID: 'y2',
                 },
             ],
         },
@@ -276,10 +326,12 @@ function updateChart(inputs) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
                             if (context.parsed.y !== null) {
-                                if (context.dataset.yAxisID === 'y1') {
-                                    label += '$' + context.parsed.y.toFixed(2);
-                                } else {
-                                    label += '$' + context.parsed.y.toFixed(2) + '/oz';
+                                if (context.dataset.yAxisID === 'y') {
+                                    label += context.parsed.y.toFixed(0) + ' oz';
+                                } else if (context.dataset.yAxisID === 'y1') {
+                                    label += context.parsed.y.toFixed(0) + ' oz (cumulative)';
+                                } else if (context.dataset.yAxisID === 'y2') {
+                                    label += context.parsed.y.toFixed(2) + 'x';
                                 }
                             }
                             return label;
@@ -294,27 +346,46 @@ function updateChart(inputs) {
                     position: 'left',
                     title: {
                         display: true,
-                        text: 'Price ($/oz)',
+                        text: 'Position Size (oz)',
                         font: { size: 12, weight: 'bold' },
                     },
                     ticks: {
                         callback: function(value) {
-                            return '$' + value.toFixed(0);
+                            return value.toFixed(0);
                         },
                     },
                 },
                 y1: {
                     type: 'linear',
                     display: true,
-                    position: 'right',
+                    position: 'center',
                     title: {
                         display: true,
-                        text: 'Buffer ($)',
+                        text: 'Additional Oz (cumulative)',
                         font: { size: 12, weight: 'bold' },
                     },
                     ticks: {
                         callback: function(value) {
-                            return '$' + value.toFixed(0);
+                            return value.toFixed(0);
+                        },
+                    },
+                    grid: {
+                        drawOnChartArea: true,
+                        color: 'rgba(16, 185, 129, 0.1)',
+                    },
+                },
+                y2: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Current Leverage (x)',
+                        font: { size: 12, weight: 'bold' },
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(1) + 'x';
                         },
                     },
                     grid: {
@@ -329,9 +400,9 @@ function updateChart(inputs) {
 // Main update function
 function updateAll() {
     const inputs = getInputs();
-    const metrics = calculateMetrics(inputs);
+    const initial = calculateInitialPosition(inputs);
 
-    updateSummary(inputs, metrics);
-    updateScenariosTable(inputs);
+    updateSummary(inputs, initial);
+    updateRebalancingTable(inputs);
     updateChart(inputs);
 }
